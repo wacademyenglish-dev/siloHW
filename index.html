@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>WOLFLIX: Silo Assessment</title>
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        silo: {
+                            black: '#0c0a09',
+                            dark: '#1c1917',
+                            crt: '#4ade80',
+                            rust: '#b45309',
+                            red: '#ef4444',
+                            text: '#f5f5f4',
+                            muted: '#78716c'
+                        }
+                    },
+                    fontFamily: {
+                        term: ['"Share Tech Mono"', 'monospace'],
+                        base: ['Inter', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #0c0a09;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            font-family: 'Inter', sans-serif;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            background-image: 
+                linear-gradient(rgba(120, 53, 15, 0.1) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(120, 53, 15, 0.1) 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+
+        /* Ambient Grit Texture */
+        body::before {
+            content: ''; position: fixed; inset: 0; pointer-events: none;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.05'/%3E%3C/svg%3E");
+            z-index: 1; opacity: 0.5;
+        }
+
+        /* Mobile Container Simulation */
+        #mobile-container {
+            width: 100%;
+            max-width: 400px;
+            height: 100dvh;
+            max-height: 850px;
+            background-color: #0c0a09;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 0 40px rgba(0, 0, 0, 0.9);
+            border: 2px solid #292524;
+            z-index: 10;
+        }
+
+        @media (min-width: 480px) {
+            #mobile-container {
+                height: 90vh;
+                border-radius: 8px;
+            }
+        }
+
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* Screen Transitions */
+        .screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column;
+            background-color: #0c0a09;
+            transform: translateX(100%);
+            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            z-index: 10;
+        }
+        .screen.active { transform: translateX(0); z-index: 20; }
+        .screen.previous { transform: translateX(-100%); z-index: 10; }
+
+        /* Option Buttons (CRT Terminal Style) */
+        .option-btn {
+            background-color: rgba(28, 25, 23, 0.8);
+            border: 1px solid #44403c;
+            color: #d6d3d1;
+            font-family: 'Share Tech Mono', monospace;
+            transition: all 0.2s ease;
+            position: relative;
+            overflow: hidden;
+            text-align: left;
+            padding: 1rem;
+            border-radius: 4px;
+            width: 100%;
+            font-size: 1rem;
+        }
+        .option-btn::before {
+            content: '>'; position: absolute; left: -20px; top: 1rem;
+            color: #4ade80; opacity: 0; transition: all 0.2s; font-weight: bold;
+        }
+        .option-btn.selected {
+            border-color: #4ade80;
+            color: #4ade80;
+            background-color: rgba(74, 222, 128, 0.1);
+            padding-left: 2rem;
+            box-shadow: inset 0 0 10px rgba(74, 222, 128, 0.1);
+        }
+        .option-btn.selected::before { opacity: 1; left: 10px; }
+        .option-btn.correct { border-color: #4ade80; color: #0c0a09; background-color: #4ade80; }
+        .option-btn.wrong { border-color: #ef4444; color: #ef4444; background-color: rgba(239, 68, 68, 0.1); text-decoration: line-through; }
+
+        /* Terminal Action Button */
+        .term-btn {
+            background: transparent;
+            color: #4ade80;
+            border: 2px solid #4ade80;
+            font-family: 'Share Tech Mono', monospace;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            transition: all 0.2s;
+            width: 100%;
+            padding: 1.25rem;
+            border-radius: 4px;
+            box-shadow: 0 0 10px rgba(74, 222, 128, 0.2);
+        }
+        .term-btn:hover:not(:disabled) {
+            background: #4ade80;
+            color: #0c0a09;
+            box-shadow: 0 0 20px rgba(74, 222, 128, 0.6);
+        }
+        .term-btn:disabled {
+            background: #1c1917;
+            color: #57534e;
+            border-color: #292524;
+            box-shadow: none;
+            cursor: not-allowed;
+        }
+
+        /* Scanline Effect */
+        .scanline {
+            width: 100%; height: 50px; z-index: 50; pointer-events: none;
+            background: linear-gradient(0deg, rgba(0,0,0,0) 0%, rgba(74,222,128,0.1) 50%, rgba(0,0,0,0) 100%);
+            opacity: 0.4; position: absolute; bottom: 100%; left: 0;
+            animation: scanline 6s linear infinite;
+        }
+        @keyframes scanline { 0% { bottom: 100%; } 100% { bottom: -50px; } }
+
+    </style>
+</head>
+<body>
+
+    <!-- DEVICE CONTAINER -->
+    <div id="mobile-container">
+        <div class="scanline"></div>
+
+        <!-- STATUS BAR -->
+        <div class="h-8 bg-silo-dark text-silo-crt flex justify-between items-center px-4 text-[10px] font-term z-50 shrink-0 border-b border-silo-crt/30 shadow-[0_0_10px_rgba(74,222,128,0.2)]">
+            <span>SYS.VER 3.1.4</span>
+            <div class="flex gap-3 items-center">
+                <span>IT DEPT</span>
+                <span class="animate-pulse">_</span>
+            </div>
+        </div>
+
+        <!-- SCREEN 1: LOGIN -->
+        <div id="screen-login" class="screen active flex items-center justify-center p-8 text-center">
+            <div class="z-10 w-full flex flex-col items-center">
+                <div class="w-32 h-32 flex items-center justify-center mb-8 border-2 border-silo-crt rounded-full shadow-[0_0_20px_rgba(74,222,128,0.4)]">
+                    <span class="text-6xl z-10 opacity-90 drop-shadow-[0_0_10px_#4ade80]">⚙️</span>
+                </div>
+                
+                <h2 class="font-term text-xs tracking-[0.3em] text-silo-muted mb-2 uppercase">Official Assessment</h2>
+                <h1 class="font-term text-4xl font-black tracking-widest mb-6 text-silo-crt uppercase drop-shadow-[0_0_10px_rgba(74,222,128,0.5)]">THE PACT</h1>
+                <p class="font-base text-sm text-silo-text mb-12 leading-relaxed bg-black/50 p-4 rounded border border-silo-crt/20 italic">
+                    "Compliance is mandatory. Prove your knowledge of the laws and obligations of the Silo."
+                </p>
+
+                <button onclick="startQuiz()" class="term-btn text-xl">
+                    [ INITIATE TEST ]
+                </button>
+            </div>
+        </div>
+
+        <!-- SCREEN 2: QUIZ -->
+        <div id="screen-quiz" class="screen flex flex-col">
+            <!-- Header -->
+            <header class="bg-silo-dark border-b border-silo-crt/30 p-4 shrink-0 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <span class="text-silo-crt text-lg">📜</span>
+                    <span class="font-term text-silo-text uppercase tracking-widest text-[10px]" id="q-category">Law</span>
+                </div>
+                <span class="font-term text-silo-black font-bold text-xs bg-silo-crt px-2 py-1 rounded" id="q-counter">1/15</span>
+            </header>
+
+            <!-- Progress Bar -->
+            <div class="w-full h-1 bg-silo-dark shrink-0">
+                <div id="progress-bar" class="h-full bg-silo-crt shadow-[0_0_10px_#4ade80] transition-all duration-300" style="width: 0%;"></div>
+            </div>
+
+            <!-- Scrollable Content Area -->
+            <div class="flex-1 overflow-y-auto no-scrollbar p-6 flex flex-col relative bg-silo-black">
+                
+                <!-- Question Text -->
+                <h2 id="q-text" class="text-lg font-bold text-silo-crt mb-8 leading-relaxed font-term border-l-2 border-silo-crt pl-4 bg-silo-crt/5 p-4 drop-shadow-[0_0_5px_rgba(74,222,128,0.5)]">
+                    Question goes here?
+                </h2>
+
+                <!-- Options Grid -->
+                <div id="options-container" class="flex flex-col gap-4 mb-8">
+                    <!-- Options injected via JS -->
+                </div>
+
+                <!-- Spacer -->
+                <div class="flex-1"></div>
+
+                <!-- Feedback Area -->
+                <div id="feedback-area" class="hidden mb-6 p-4 font-term text-xs font-bold border border-current bg-black/60 rounded">
+                    Feedback goes here
+                </div>
+
+            </div>
+
+            <!-- Bottom Action Bar -->
+            <div class="p-4 bg-silo-dark border-t border-silo-crt/20 shrink-0">
+                <button id="btn-next" onclick="handleNext()" disabled class="term-btn text-sm">
+                    SUBMIT ANSWER
+                </button>
+            </div>
+        </div>
+
+        <!-- SCREEN 3: RESULTS -->
+        <div id="screen-results" class="screen flex flex-col relative overflow-hidden">
+            <header class="bg-silo-dark text-silo-muted p-4 shrink-0 text-center border-b border-silo-crt/30">
+                <span class="font-term uppercase tracking-widest text-[10px] text-silo-crt">ASSESSMENT COMPLETE</span>
+            </header>
+
+            <div class="flex-1 flex flex-col items-center justify-center p-8 text-center z-10">
+                <div id="result-icon" class="text-7xl mb-6 drop-shadow-[0_0_20px_#4ade80]">🏢</div>
+                <h1 id="result-title" class="text-3xl font-term font-black text-silo-text uppercase tracking-widest mb-2 drop-shadow-md">Mayor</h1>
+                <p id="result-subtitle" class="text-sm font-term text-silo-muted mb-8 uppercase tracking-widest">Compliance: <span id="final-score" class="text-silo-crt">15</span> / 15</p>
+                
+                <div class="w-full bg-silo-crt/5 p-6 border border-silo-crt/30 mb-10 rounded shadow-[0_0_20px_rgba(74,222,128,0.1)]">
+                    <p id="result-msg" class="font-term text-sm text-silo-text leading-relaxed uppercase tracking-widest">
+                        "Your knowledge of The Pact is absolute. You are safe."
+                    </p>
+                </div>
+
+                <button onclick="restartApp()" class="w-full term-btn text-sm py-4">
+                    [ REBOOT SYSTEM ]
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- JAVASCRIPT LOGIC -->
+    <script>
+        // --- 1. Questions Database ---
+        const questions = [
+            {
+                category: "Lexicon",
+                question: "What is a 'Relic'?",
+                options: ["A toxic plant.", "An illegal object from the Before Times.", "A machine that cleans the air."],
+                correctIndex: 1,
+                explanation: "Relics are historical objects that are strictly forbidden in the Silo."
+            },
+            {
+                category: "Lexicon",
+                question: "If the air outside is 'Toxic', it means it is...",
+                options: ["Cold and windy.", "Fresh and clean.", "Poisonous and deadly."],
+                correctIndex: 2,
+                explanation: "Toxic means highly poisonous."
+            },
+            {
+                category: "Lexicon",
+                question: "To 'Rebel' against the government means to...",
+                options: ["Follow all the rules.", "Rise in opposition and fight back.", "Clean the cafeteria."],
+                correctIndex: 1,
+                explanation: "Rebellion is the act of fighting against authority."
+            },
+            {
+                category: "Modals: Prohibition",
+                question: "Which modal expresses a strict rule or law you cannot break?",
+                options: ["Don't have to", "Mustn't", "Might not"],
+                correctIndex: 1,
+                explanation: "'Mustn't' indicates strict prohibition (it is illegal/dangerous)."
+            },
+            {
+                category: "Modals: Obligation",
+                question: "Complete the law: 'Citizens ___ ask questions about the past.'",
+                options: ["mustn't", "don't have to", "haven't to"],
+                correctIndex: 0,
+                explanation: "Asking questions is strictly forbidden (mustn't)."
+            },
+            {
+                category: "Modals: No Obligation",
+                question: "Complete: 'You ___ work in the mines. You can choose to be a farmer instead.'",
+                options: ["mustn't", "can't", "don't have to"],
+                correctIndex: 2,
+                explanation: "'Don't have to' means there is no obligation; you have a choice."
+            },
+            {
+                category: "Modals: Obligation",
+                question: "Complete: 'We ___ follow The Pact if we want to survive.'",
+                options: ["must", "can", "might"],
+                correctIndex: 0,
+                explanation: "'Must' or 'Have to' expresses strong obligation."
+            },
+            {
+                category: "Modals: Differences",
+                question: "What is the difference between 'Mustn't' and 'Don't have to'?",
+                options: [
+                    "They mean the exact same thing.",
+                    "Mustn't is a prohibition; Don't have to is a choice.",
+                    "Mustn't is a choice; Don't have to is a rule."
+                ],
+                correctIndex: 1,
+                explanation: "Mustn't = Do not do it! | Don't have to = You choose."
+            },
+            {
+                category: "Permission",
+                question: "Complete: 'Are we ___ go to the lower levels?'",
+                options: ["can", "allowed to", "must"],
+                correctIndex: 1,
+                explanation: "'Allowed to' is used with the verb 'To Be' to ask about rules and permissions."
+            },
+            {
+                category: "Permission",
+                question: "Complete: 'The mechanics ___ fix the generator tomorrow.'",
+                options: ["can", "allowed", "musts"],
+                correctIndex: 0,
+                explanation: "'Can' expresses ability and general permission."
+            },
+            {
+                category: "Conditionals",
+                question: "1st Conditional: 'If you say you want to go out, you ___ die.'",
+                options: ["would", "will", "did"],
+                correctIndex: 1,
+                explanation: "1st Conditional for real/possible future consequences: If + Present, Will."
+            },
+            {
+                category: "Conditionals",
+                question: "2nd Conditional: 'If the air outside ___ clean, we would leave the Silo.'",
+                options: ["is", "was / were", "will be"],
+                correctIndex: 1,
+                explanation: "2nd Conditional for imaginary situations: If + Past Simple, Would."
+            },
+            {
+                category: "Conditionals",
+                question: "Complete: 'If Juliette ___ the truth, she will start a rebellion.'",
+                options: ["finds", "found", "will find"],
+                correctIndex: 0,
+                explanation: "1st Conditional: If + Present Simple (finds)."
+            },
+            {
+                category: "Conditionals",
+                question: "Complete: 'What would you do if you ___ an illegal relic?'",
+                options: ["find", "found", "finding"],
+                correctIndex: 1,
+                explanation: "2nd Conditional (Imaginary): If + Past Simple (found)."
+            },
+            {
+                category: "Context",
+                question: "Why do people go outside to clean the camera lens?",
+                options: [
+                    "It is a highly paid job.",
+                    "They are sentenced to clean as a punishment.",
+                    "They want to see the sun."
+                ],
+                correctIndex: 1,
+                explanation: "Cleaning is the ultimate death sentence for breaking the law."
+            }
+        ];
+
+        // --- 2. App State & Logic ---
+        let currentQuestionIndex = 0;
+        let score = 0;
+        let hasAnswered = false;
+        let selectedIdx = null;
+
+        function startQuiz() {
+            currentQuestionIndex = 0; score = 0;
+            switchScreen('screen-login', 'screen-quiz');
+            loadQuestion();
+        }
+
+        function switchScreen(oldId, newId) {
+            const oldScreen = document.getElementById(oldId);
+            const newScreen = document.getElementById(newId);
+            if(oldScreen) oldScreen.classList.replace('active', 'previous');
+            if(newScreen) {
+                newScreen.classList.remove('previous');
+                newScreen.classList.add('active');
+            }
+        }
+
+        function loadQuestion() {
+            hasAnswered = false;
+            selectedIdx = null;
+            const q = questions[currentQuestionIndex];
+            
+            const counter = document.getElementById('q-counter');
+            const category = document.getElementById('q-category');
+            const qText = document.getElementById('q-text');
+            const progressBar = document.getElementById('progress-bar');
+            
+            if(counter) counter.innerText = `${currentQuestionIndex + 1}/15`;
+            if(category) category.innerText = q.category;
+            if(qText) qText.innerText = q.question;
+            if(progressBar) progressBar.style.width = `${(currentQuestionIndex / 15) * 100}%`;
+            
+            const container = document.getElementById('options-container');
+            if(container) {
+                container.innerHTML = '';
+                q.options.forEach((opt, idx) => {
+                    const btn = document.createElement('button');
+                    btn.className = 'option-btn';
+                    btn.innerText = opt;
+                    btn.onclick = () => selectOption(idx, btn);
+                    container.appendChild(btn);
+                });
+            }
+
+            const nextBtn = document.getElementById('btn-next');
+            if(nextBtn) {
+                nextBtn.disabled = true;
+                nextBtn.innerText = "SUBMIT ANSWER";
+            }
+            const fb = document.getElementById('feedback-area');
+            if(fb) fb.classList.add('hidden');
+        }
+
+        function selectOption(idx, btn) {
+            if(hasAnswered) return;
+            selectedIdx = idx;
+            document.querySelectorAll('.option-btn').forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
+            const nextBtn = document.getElementById('btn-next');
+            if(nextBtn) nextBtn.disabled = false;
+        }
+
+        function handleNext() {
+            if(!hasAnswered) {
+                checkAnswer();
+            } else {
+                currentQuestionIndex++;
+                if(currentQuestionIndex < 15) loadQuestion();
+                else finishQuiz();
+            }
+        }
+
+        function checkAnswer() {
+            hasAnswered = true;
+            const q = questions[currentQuestionIndex];
+            const btns = document.querySelectorAll('.option-btn');
+            const fb = document.getElementById('feedback-area');
+            const nextBtn = document.getElementById('btn-next');
+
+            if(selectedIdx === q.correctIndex) {
+                score++;
+                if(btns[selectedIdx]) btns[selectedIdx].classList.add('correct');
+                if(fb) {
+                    fb.classList.remove('hidden');
+                    fb.className = "mb-6 p-4 font-term text-sm border border-silo-crt text-silo-black bg-silo-crt rounded drop-shadow-[0_0_5px_rgba(74,222,128,0.8)]";
+                    fb.innerText = "> COMPLIANT: " + q.explanation;
+                }
+            } else {
+                if(btns[selectedIdx]) btns[selectedIdx].classList.add('wrong');
+                if(btns[q.correctIndex]) btns[q.correctIndex].classList.add('correct');
+                if(fb) {
+                    fb.classList.remove('hidden');
+                    fb.className = "mb-6 p-4 font-term text-sm border border-red-500 text-red-100 bg-red-900 rounded drop-shadow-[0_0_5px_rgba(239,68,68,0.8)]";
+                    fb.innerText = "> VIOLATION: " + q.explanation;
+                }
+            }
+            if(nextBtn) nextBtn.innerText = currentQuestionIndex === 14 ? "[ ACCESS RECORDS ]" : "[ NEXT QUERY ]";
+        }
+
+        function finishQuiz() {
+            switchScreen('screen-quiz', 'screen-results');
+            const scoreEl = document.getElementById('final-score');
+            const titleEl = document.getElementById('result-title');
+            const iconEl = document.getElementById('result-icon');
+            const msgEl = document.getElementById('result-msg');
+            
+            if(scoreEl) scoreEl.innerText = score;
+            if(titleEl) {
+                if(score >= 13) {
+                    titleEl.innerText = "Mayor of the Silo";
+                    titleEl.className = "text-3xl font-term font-black text-silo-crt uppercase tracking-widest mb-2 drop-shadow-[0_0_10px_rgba(74,222,128,0.5)]";
+                    iconEl.innerText = "⚖️";
+                    iconEl.className = "text-7xl mb-6 drop-shadow-[0_0_20px_#4ade80]";
+                    msgEl.innerText = "\"Your knowledge of The Pact is absolute. You lead the people safely.\"";
+                }
+                else if(score >= 8) {
+                    titleEl.innerText = "Level Mechanic";
+                    titleEl.className = "text-3xl font-term font-black text-orange-500 uppercase tracking-widest mb-2 drop-shadow-[0_0_10px_rgba(249,115,22,0.5)]";
+                    iconEl.innerText = "🔧";
+                    iconEl.className = "text-7xl mb-6 drop-shadow-[0_0_20px_#f97316]";
+                    msgEl.innerText = "\"Good effort. Keep working hard, but review your Modals of Prohibition.\"";
+                }
+                else {
+                    titleEl.innerText = "Sentenced to Clean";
+                    titleEl.className = "text-3xl font-term font-black text-red-500 uppercase tracking-widest mb-2 drop-shadow-[0_0_10px_rgba(239,68,68,0.8)]";
+                    iconEl.innerText = "☠️";
+                    iconEl.className = "text-7xl mb-6 drop-shadow-[0_0_20px_#ef4444]";
+                    msgEl.innerText = "\"Violation of The Pact detected. You are going outside. Reboot to try and save yourself.\"";
+                }
+            }
+        }
+
+        function restartApp() { switchScreen('screen-results', 'screen-login'); }
+
+        // Secure Clock Initialization
+        window.onload = function() {
+            const updateTime = () => {
+                const clockEl = document.getElementById('clock');
+                if (clockEl) {
+                    const now = new Date();
+                    clockEl.innerText = now.getHours().toString().padStart(2,'0') + ":" + now.getMinutes().toString().padStart(2,'0');
+                }
+            };
+            updateTime();
+            setInterval(updateTime, 60000);
+        };
+    </script>
+</body>
+</html>
